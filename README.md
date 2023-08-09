@@ -1,2 +1,0 @@
-# Semester-project-
-Phonebook Application 
