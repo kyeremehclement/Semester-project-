@@ -1,0 +1,283 @@
+
+
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <vector>
+#include <algorithm>
+#include <thread>
+#include <mutex>
+
+using namespace std;
+
+class Contact {
+public:
+    string name;
+    string phone;
+    string email;
+    string address;
+    string notes;
+
+    Contact() {}
+    Contact(string n, string p, string e, string a, string nt) {
+        name = n;
+        phone = p;
+        email = e;
+        address = a;
+        notes = nt;
+    }
+};
+
+class Phonebook {
+private:
+    vector<Contact> contacts;
+    mutex mtx;
+
+public:
+    Phonebook() {}
+
+    void addContact(Contact c) {
+        mtx.lock();
+        contacts.push_back(c);
+        mtx.unlock();
+    }
+
+    void editContact(int index, Contact c) {
+        mtx.lock();
+        contacts[index] = c;
+        mtx.unlock();
+    }
+
+    void deleteContact(int index) {
+        mtx.lock();
+        contacts.erase(contacts.begin() + index);
+        mtx.unlock();
+    }
+
+    vector<Contact> searchContacts(string keyword) {
+        vector<Contact> results;
+        for (int i = 0; i < contacts.size(); i++) {
+            if (contacts[i].name.find(keyword) != string::npos ||
+                contacts[i].phone.find(keyword) != string::npos) {
+                results.push_back(contacts[i]);
+            }
+        }
+        return results;
+    }
+
+    void sortContacts(bool byName) {
+        mtx.lock();
+        if (byName) {
+            sort(contacts.begin(), contacts.end(), [](Contact a, Contact b) {
+                return a.name < b.name;
+            });
+        } else {
+            sort(contacts.begin(), contacts.end(), [](Contact a, Contact b) {
+                return a.phone < b.phone;
+            });
+        }
+        mtx.unlock();
+    }
+
+    void loadContacts(string filename) {
+        mtx.lock();
+        ifstream file(filename);
+        if (file.is_open()) {
+            string line;
+            while (getline(file, line)) {
+                string name, phone, email, address, notes;
+                size_t pos1 = line.find(',');
+                size_t pos2 = line.find(',', pos1 + 1);
+                size_t pos3 = line.find(',', pos2 + 1);
+                size_t pos4 = line.find(',', pos3 + 1);
+                name = line.substr(0, pos1);
+                phone = line.substr(pos1 + 1, pos2 - pos1 - 1);
+                email = line.substr(pos2 + 1, pos3 - pos2 - 1);
+                address = line.substr(pos3 + 1, pos4 - pos3 - 1);
+                notes = line.substr(pos4 + 1);
+                contacts.push_back(Contact(name, phone, email, address, notes));
+            }
+            file.close();
+        }
+        mtx.unlock();
+    }
+
+    void saveContacts(string filename) {
+        mtx.lock();
+        ofstream file(filename);
+        if (file.is_open()) {
+            for (int i = 0; i < contacts.size(); i++) {
+                file << contacts[i].name << ","
+                     << contacts[i].phone << ","
+                     << contacts[i].email << ","
+                     << contacts[i].address << ","
+                     << contacts[i].notes << endl;
+            }
+            file.close();
+        }
+        mtx.unlock();
+    }
+};
+
+class UI {
+private:
+    Phonebook phonebook;
+
+public:
+    UI() {}
+
+    void run() {
+        cout << "Welcome to Phonebook Application!" << endl;
+        while (true) {
+            cout << "Please select an option:" << endl;
+            cout << "1. Add a new contact" << endl;
+            cout << "2. Edit an existing contact" << endl;
+            cout << "3. Delete a contact" << endl;
+            cout << "4. Search for a contact" << endl;
+            cout << "5. Sort contacts by name or phone number" << endl;
+            cout << "6. Load contacts from file" << endl;
+            cout << "7. Save contacts to file" << endl;
+            cout << "8. Quit" << endl;
+
+            int choice;
+
+cin >> choice;
+
+            switch (choice) {
+                case 1:
+                    addContact();
+                    break;
+                case 2:
+                    editContact();
+                    break;
+                case 3:
+                    deleteContact();
+                    break;
+                case 4:
+                    searchContacts();
+                    break;
+                case 5:
+                    sortContacts();
+                    break;
+                case 6:
+                    loadContacts();
+                    break;
+                case 7:
+                    saveContacts();
+                    break;
+                case 8:
+                    cout << "Thank you for using Phonebook Application!" << endl;
+                    return;
+                default:
+                    cout << "Invalid choice. Please try again." << endl;
+            }
+        }
+    }
+
+    void addContact() {
+        string name, phone, email, address, notes;
+        cout << "Please enter the name of the contact: ";
+        cin.ignore();
+        getline(cin, name);
+        cout << "Please enter the phone number of the contact: ";
+        getline(cin, phone);
+        cout << "Please enter the email address of the contact: ";
+        getline(cin, email);
+        cout << "Please enter the address of the contact: ";
+        getline(cin, address);
+        cout << "Please enter any notes about the contact: ";
+        getline(cin, notes);
+        phonebook.addContact(Contact(name, phone, email, address, notes));
+        cout << "Contact added successfully." << endl;
+    }
+
+    void editContact() {
+        int index;
+        cout << "Please enter the index of the contact to edit: ";
+        cin >> index;
+        if (index >= 0 && index < phonebook.searchContacts("").size()) {
+            string name, phone, email, address, notes;
+            cout << "Please enter the new name of the contact: ";
+            cin.ignore();
+            getline(cin, name);
+            cout << "Please enter the new phone number of the contact: ";
+            getline(cin, phone);
+            cout << "Please enter the new email address of the contact: ";
+            getline(cin, email);
+            cout << "Please enter the new address of the contact: ";
+            getline(cin, address);
+            cout << "Please enter any new notes about the contact: ";
+            getline(cin, notes);
+            phonebook.editContact(index, Contact(name, phone, email, address, notes));
+            cout << "Contact edited successfully." << endl;
+        } else {
+            cout << "Invalid index. Please try again." << endl;
+        }
+    }
+
+    void deleteContact() {
+        int index;
+        cout << "Please enter the index of the contact to delete: ";
+        cin >> index;
+        if (index >= 0 && index < phonebook.searchContacts("").size()) {
+            phonebook.deleteContact(index);
+            cout << "Contact deleted successfully." << endl;
+        } else {
+            cout << "Invalid index. Please try again." << endl;
+        }
+    }
+
+    void searchContacts() {
+        string keyword;
+        cout << "Please enter a keyword to search for: ";
+        cin.ignore();
+        getline(cin, keyword);
+        vector<Contact> results = phonebook.searchContacts(keyword);
+        if (results.size() > 0) {
+            cout << "Search results:" << endl;
+            for (int i = 0; i < results.size(); i++) {
+                cout << i << ". " << results[i].name << ", " << results[i].phone << endl;
+            }
+        } else {
+            cout << "No results found." << endl;
+        }
+    }
+
+    void sortContacts() {
+        char choice;
+        cout << "Please select a sorting option (n for name, p for phone number): ";
+        cin >> choice;
+
+if (choice == 'n') {
+            phonebook.sortContacts(true);
+            cout << "Contacts sorted by name." << endl;
+        } else if (choice == 'p') {
+            phonebook.sortContacts(false);
+            cout << "Contacts sorted by phone number." << endl;
+        } else {
+            cout << "Invalid choice. Please try again." << endl;
+        }
+    }
+
+    void loadContacts() {
+        string filename;
+        cout << "Please enter the filename to load from: ";
+        cin >> filename;
+        phonebook.loadContacts(filename);
+        cout << "Contacts loaded successfully." << endl;
+    }
+
+    void saveContacts() {
+        string filename;
+        cout << "Please enter the filename to save to: ";
+        cin >> filename;
+        phonebook.saveContacts(filename);
+        cout << "Contacts saved successfully." << endl;
+    }
+};
+
+int main() {
+    UI ui;
+    ui.run();
+    return 0;
+}
